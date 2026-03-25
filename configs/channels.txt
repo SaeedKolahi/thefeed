@@ -2,11 +2,3 @@
 # Channel numbers are assigned in order: first = channel 1, second = channel 2, etc.
 # Lines starting with # are comments
 @VahidOnline
-@iliaen
-@IranintlTV
-@ircfspace
-@wiki_tajrobe
-@MatinSenPaii
-@jadivarlog
-@mahsa_net
-@mahsa_alert

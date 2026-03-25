@@ -216,16 +216,6 @@ This delegates all DNS queries for `t.example.com` (and its subdomains) to your 
 @VahidOnline
 ```
 
-## Resolver File Format
-
-```
-# One IP or CIDR per line
-8.8.8.8
-1.1.1.1
-9.9.9.9
-208.67.222.0/24
-```
-
 ## Security
 
 - All queries and responses are encrypted with AES-256-GCM
