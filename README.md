@@ -192,12 +192,41 @@ make fmt         # Format code
 make clean       # Remove build artifacts
 ```
 
-## DNS Setup
+## DNS Records Setup
 
-1. Register a domain (e.g., `example.com`)
-2. Add NS record: `t.example.com NS your-server-ip`
-3. Or add a glue record pointing `ns.example.com` to your server IP, then `t.example.com NS ns.example.com`
-4. Run the server on port 53 (or 5300 and redirect with iptables)
+You need **two DNS records** on your domain. Suppose your server IP is `203.0.113.10` and you want to use `example.com`:
+
+### 1. A Record for the NS server
+
+| Type | Name | Value |
+|------|------|-------|
+| A | `ns.example.com` | `203.0.113.10` |
+
+This points a hostname to your server IP.
+
+### 2. NS Record for the tunnel subdomain
+
+| Type | Name | Value |
+|------|------|-------|
+| NS | `t.example.com` | `ns.example.com` |
+
+This delegates all DNS queries for `t.example.com` (and its subdomains) to your server.
+
+> **Note:** The server needs to receive packets on external port 53. Running on `:53` directly requires root. It's better to listen on an unprivileged port (`:5300`) and port-forward 53 to it.
+>
+> Replace `eth0` with your actual network interface name (check with `ip a`):
+> ```bash
+> sudo iptables -I INPUT -p udp --dport 5300 -j ACCEPT
+> sudo iptables -t nat -I PREROUTING -i eth0 -p udp --dport 53 -j REDIRECT --to-ports 5300
+> sudo ip6tables -I INPUT -p udp --dport 5300 -j ACCEPT
+> sudo ip6tables -t nat -I PREROUTING -i eth0 -p udp --dport 53 -j REDIRECT --to-ports 5300
+> ```
+>
+> To make these rules persistent across reboots:
+> ```bash
+> sudo apt install iptables-persistent   # Debian/Ubuntu
+> sudo netfilter-persistent save
+> ```
 
 ## channels.txt Format
 
