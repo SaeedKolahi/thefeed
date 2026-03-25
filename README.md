@@ -204,7 +204,6 @@ make clean       # Remove build artifacts
 ```
 # Comments start with #
 @VahidOnline
-@kianmeli1
 ```
 
 ## Resolver File Format

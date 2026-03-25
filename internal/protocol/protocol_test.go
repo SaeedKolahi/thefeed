@@ -11,7 +11,7 @@ func TestSerializeParseMetadata(t *testing.T) {
 		Timestamp: 1700000000,
 		Channels: []ChannelInfo{
 			{Name: "VahidOnline", Blocks: 5, LastMsgID: 1234},
-			{Name: "kianmeli1", Blocks: 3, LastMsgID: 5678},
+			{Name: "test", Blocks: 3, LastMsgID: 5678},
 		},
 	}
 	data := SerializeMetadata(original)
