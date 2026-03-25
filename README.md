@@ -7,7 +7,7 @@ DNS-based feed reader for Telegram channels. Designed for environments where onl
 ```
 ┌──────────────┐     DNS TXT Query       ┌──────────────┐     MTProto     ┌──────────┐
 │    Client    │ ──────────────────────▸ │    Server    │ ──────────────▸ │ Telegram │
-│  (TUI app)   │ ◂────────────────────── │  (DNS auth)  │ ◂────────────── │   API    │
+│  (Web UI)    │ ◂────────────────────── │  (DNS auth)  │ ◂────────────── │   API    │
 └──────────────┘     Encrypted TXT       └──────────────┘                 └──────────┘
 ```
 
@@ -16,13 +16,16 @@ DNS-based feed reader for Telegram channels. Designed for environments where onl
 - Serves feed data as encrypted DNS TXT responses
 - Random padding on responses to vary size (anti-DPI)
 - Session persistence — login once, run forever
+- All data stored in a single directory
 
 **Client** (runs inside censored network):
+- Browser-based web UI with RTL/Farsi support (VazirMatn font)
+- Configure via the web UI — no CLI flags needed
 - Sends encrypted DNS TXT queries via available resolvers
 - Single-label base32 encoding (stealthier) or double-label hex
 - Rate limiting to respect resolver limits
-- TUI with RTL/Farsi support, log panel showing DNS queries
-- Built-in resolver scanner (file with IPs/CIDRs or single CIDR)
+- Live DNS query log in the browser
+- All data (config, cache) stored next to the binary
 
 ## Anti-DPI Features
 
@@ -87,25 +90,25 @@ make build-server
 # First run: login to Telegram and save session
 ./build/thefeed-server \
   --login-only \
+  --data-dir ./data \
   --domain t.example.com \
   --key "your-secret-passphrase" \
-  --channels configs/channels.txt \
   --api-id 12345 \
   --api-hash "your-api-hash" \
-  --phone "+1234567890" \
-  --session session.json
+  --phone "+1234567890"
 
-# Normal run (uses saved session)
+# Normal run (uses saved session from data directory)
 ./build/thefeed-server \
+  --data-dir ./data \
   --domain t.example.com \
   --key "your-secret-passphrase" \
-  --channels configs/channels.txt \
   --api-id 12345 \
   --api-hash "your-api-hash" \
   --phone "+1234567890" \
-  --session session.json \
   --listen ":5300"
 ```
+
+All data files (session, channels) are stored in the `--data-dir` directory (default: `./data`).
 
 Environment variables: `THEFEED_DOMAIN`, `THEFEED_KEY`, `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_PHONE`, `TELEGRAM_PASSWORD`
 
@@ -113,13 +116,14 @@ Environment variables: `THEFEED_DOMAIN`, `THEFEED_KEY`, `TELEGRAM_API_ID`, `TELE
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--data-dir` | `./data` | Data directory for channels, session, config |
 | `--domain` | | DNS domain (required) |
 | `--key` | | Encryption passphrase (required) |
-| `--channels` | `channels.txt` | Path to channels file |
+| `--channels` | `{data-dir}/channels.txt` | Path to channels file |
 | `--api-id` | | Telegram API ID (required) |
 | `--api-hash` | | Telegram API Hash (required) |
 | `--phone` | | Telegram phone number (required) |
-| `--session` | `session.json` | Path to Telegram session file |
+| `--session` | `{data-dir}/session.json` | Path to Telegram session file |
 | `--login-only` | `false` | Authenticate to Telegram, save session, exit |
 | `--listen` | `:5300` | DNS listen address |
 | `--padding` | `32` | Max random padding bytes (0=disabled) |
@@ -131,55 +135,32 @@ Environment variables: `THEFEED_DOMAIN`, `THEFEED_KEY`, `TELEGRAM_API_ID`, `TELE
 # Build
 make build-client
 
-# Basic usage
-./build/thefeed-client \
-  --domain t.example.com \
-  --key "your-secret-passphrase" \
-  --resolvers "8.8.8.8,1.1.1.1"
+# Run (opens web UI in browser)
+./build/thefeed-client
 
-# With resolver scanning from file
-./build/thefeed-client \
-  --domain t.example.com \
-  --key "your-secret-passphrase" \
-  --scan configs/resolvers.txt \
-  --rate 5
-
-# Scan a CIDR range
-./build/thefeed-client \
-  --domain t.example.com \
-  --key "your-secret-passphrase" \
-  --scan "8.8.8.0/24" \
-  --resolvers configs/resolvers.txt
+# Custom data directory and port
+./build/thefeed-client --data-dir ./mydata --port 9090
 ```
+
+On first run, the client creates a `./thefeeddata/` directory next to where you run it. Open `http://127.0.0.1:8080` in your browser and configure your domain, passphrase, and resolvers through the Settings page.
+
+All configuration, cache, and data files are stored in the data directory.
 
 #### Client Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--domain` | | DNS domain (required) |
-| `--key` | | Encryption passphrase (required) |
-| `--resolvers` | | Comma-separated IPs or path to file |
-| `--scan` | | File with IPs/CIDRs or single CIDR to scan |
-| `--scan-workers` | `50` | Concurrent scanner workers |
-| `--rate` | `0` | Max DNS queries/sec (0=unlimited) |
-| `--query-mode` | `single` | `single` (base32) or `double` (hex) |
-| `--cache` | `~/.thefeed/cache` | Cache directory |
+| `--data-dir` | `./thefeeddata` | Data directory for config, cache |
+| `--port` | `8080` | Web UI port |
 | `--version` | | Show version and exit |
 
-### TUI Controls
+### Web UI
 
-| Key | Action |
-|-----|--------|
-| `Tab` / `←` / `→` | Cycle panels (channels → messages → log) |
-| `j` / `k` / `↑` / `↓` | Navigate up/down |
-| `r` | Refresh feed |
-| `PgUp` / `PgDn` | Scroll content |
-| `q` / `Ctrl+C` | Quit |
-
-The TUI has three panels:
-- **Channels** (left): channel list with selection
-- **Messages** (right): messages with RTL/Farsi support
-- **Log** (bottom): DNS queries being sent (debug)
+The browser-based UI has:
+- **Channels sidebar** (left): channel list with selection
+- **Messages panel** (right): messages with native RTL/Farsi rendering (VazirMatn font)
+- **Log panel** (bottom): live DNS query log
+- **Settings modal**: configure domain, passphrase, resolvers, query mode, rate limit
 
 ## Development
 
@@ -265,11 +246,11 @@ systemctl restart thefeed-server
 journalctl -u thefeed-server -f
 
 # Update channels
-sudo vi /etc/thefeed/channels.txt
+sudo vi /opt/thefeed/data/channels.txt
 sudo systemctl restart thefeed-server
 
 # Update binary
-cd thefeed && git pull && sudo bash scripts/install.sh
+sudo bash scripts/install.sh
 ```
 
 ## License

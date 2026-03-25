@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -19,15 +20,16 @@ import (
 )
 
 func main() {
+	dataDir := flag.String("data-dir", "./data", "Data directory for channels, session, and config")
 	listen := flag.String("listen", ":5300", "DNS listen address (host:port)")
 	domain := flag.String("domain", "", "DNS domain (e.g., t.example.com)")
 	key := flag.String("key", "", "Encryption passphrase")
-	channelsFile := flag.String("channels", "channels.txt", "Path to channels file")
+	channelsFile := flag.String("channels", "", "Path to channels file (default: {data-dir}/channels.txt)")
 	apiID := flag.String("api-id", "", "Telegram API ID")
 	apiHash := flag.String("api-hash", "", "Telegram API Hash")
 	phone := flag.String("phone", "", "Telegram phone number")
 	loginOnly := flag.Bool("login-only", false, "Authenticate to Telegram, save session, and exit")
-	sessionPath := flag.String("session", "session.json", "Path to Telegram session file")
+	sessionPath := flag.String("session", "", "Path to Telegram session file (default: {data-dir}/session.json)")
 	maxPadding := flag.Int("padding", 32, "Max random padding bytes in DNS responses (anti-DPI, 0=disabled)")
 	showVersion := flag.Bool("version", false, "Show version and exit")
 	flag.Parse()
@@ -35,6 +37,19 @@ func main() {
 	if *showVersion {
 		fmt.Printf("thefeed-server %s (commit: %s, built: %s)\n", version.Version, version.Commit, version.Date)
 		os.Exit(0)
+	}
+
+	// Create data directory
+	if err := os.MkdirAll(*dataDir, 0700); err != nil {
+		log.Fatalf("Create data dir: %v", err)
+	}
+
+	// Default paths relative to data directory
+	if *channelsFile == "" {
+		*channelsFile = filepath.Join(*dataDir, "channels.txt")
+	}
+	if *sessionPath == "" {
+		*sessionPath = filepath.Join(*dataDir, "session.json")
 	}
 
 	if *domain == "" {

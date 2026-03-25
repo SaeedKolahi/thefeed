@@ -14,6 +14,10 @@ Thumbs.db
 # Cache
 .thefeed/
 
+# Data directories
+thefeeddata/
+data/
+
 # Session data
 session.json
 

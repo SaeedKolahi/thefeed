@@ -8,8 +8,7 @@ plain='\033[0m'
 
 GITHUB_REPO="sartoopjj/thefeed"
 INSTALL_DIR="/opt/thefeed"
-CONFIG_DIR="/etc/thefeed"
-SESSION_DIR="/var/lib/thefeed"
+DATA_DIR="${INSTALL_DIR}/data"
 SERVICE_FILE="/etc/systemd/system/thefeed-server.service"
 
 # check root
@@ -99,13 +98,13 @@ download_binary() {
 }
 
 setup_config() {
-    mkdir -p "$CONFIG_DIR" "$SESSION_DIR"
+    mkdir -p "$DATA_DIR"
 
     # Channels file
-    if [[ ! -f "$CONFIG_DIR/channels.txt" ]]; then
+    if [[ ! -f "$DATA_DIR/channels.txt" ]]; then
         echo -e "\n${green}Setting up channels...${plain}"
-        echo "# Telegram channel usernames (one per line)" > "$CONFIG_DIR/channels.txt"
-        echo "# Lines starting with # are comments" >> "$CONFIG_DIR/channels.txt"
+        echo "# Telegram channel usernames (one per line)" > "$DATA_DIR/channels.txt"
+        echo "# Lines starting with # are comments" >> "$DATA_DIR/channels.txt"
 
         echo ""
         echo -e "${yellow}Enter Telegram channel usernames (one per line, empty line to finish):${plain}"
@@ -115,15 +114,15 @@ setup_config() {
                 break
             fi
             channel="${channel#@}"
-            echo "@$channel" >> "$CONFIG_DIR/channels.txt"
+            echo "@$channel" >> "$DATA_DIR/channels.txt"
             echo -e "  ${green}Added @${channel}${plain}"
         done
     else
-        echo -e "${yellow}Channels file already exists: ${CONFIG_DIR}/channels.txt${plain}"
+        echo -e "${yellow}Channels file already exists: ${DATA_DIR}/channels.txt${plain}"
     fi
 
     # Environment file
-    if [[ ! -f "$CONFIG_DIR/thefeed.env" ]]; then
+    if [[ ! -f "$DATA_DIR/thefeed.env" ]]; then
         echo -e "\n${green}═══════════════════════════════════════${plain}"
         echo -e "${green}  Server Configuration${plain}"
         echo -e "${green}═══════════════════════════════════════${plain}"
@@ -167,7 +166,7 @@ setup_config() {
         read -rp "DNS listen address [0.0.0.0:53]: " listen_addr
         listen_addr="${listen_addr:-0.0.0.0:53}"
 
-        cat > "$CONFIG_DIR/thefeed.env" <<ENVEOF
+        cat > "$DATA_DIR/thefeed.env" <<ENVEOF
 THEFEED_DOMAIN=${domain}
 THEFEED_KEY=${passkey}
 TELEGRAM_API_ID=${api_id}
@@ -175,13 +174,13 @@ TELEGRAM_API_HASH=${api_hash}
 TELEGRAM_PHONE=${phone}
 THEFEED_LISTEN=${listen_addr}
 ENVEOF
-        chmod 600 "$CONFIG_DIR/thefeed.env"
-        echo -e "${green}Config saved to ${CONFIG_DIR}/thefeed.env${plain}"
+        chmod 600 "$DATA_DIR/thefeed.env"
+        echo -e "${green}Config saved to ${DATA_DIR}/thefeed.env${plain}"
     else
-        echo -e "${yellow}Config already exists: ${CONFIG_DIR}/thefeed.env${plain}"
+        echo -e "${yellow}Config already exists: ${DATA_DIR}/thefeed.env${plain}"
     fi
 
-    chmod 700 "$SESSION_DIR"
+    chmod 700 "$DATA_DIR"
 }
 
 telegram_login() {
@@ -192,27 +191,26 @@ telegram_login() {
     echo ""
 
     set -a
-    source "$CONFIG_DIR/thefeed.env"
+    source "$DATA_DIR/thefeed.env"
     set +a
 
     "$INSTALL_DIR/thefeed-server" \
         --login-only \
+        --data-dir "$DATA_DIR" \
         --domain "$THEFEED_DOMAIN" \
         --key "$THEFEED_KEY" \
         --api-id "$TELEGRAM_API_ID" \
         --api-hash "$TELEGRAM_API_HASH" \
-        --phone "$TELEGRAM_PHONE" \
-        --channels "$CONFIG_DIR/channels.txt" \
-        --session "$SESSION_DIR/session.json"
+        --phone "$TELEGRAM_PHONE"
 
     if [[ $? -ne 0 ]]; then
         echo -e "${red}Telegram login failed${plain}"
         echo -e "${yellow}You can retry later with:${plain}"
-        echo -e "  sudo ${INSTALL_DIR}/thefeed-server --login-only --session ${SESSION_DIR}/session.json ..."
+        echo -e "  sudo bash install.sh --login"
         return 1
     fi
 
-    chmod 600 "$SESSION_DIR/session.json"
+    chmod 600 "$DATA_DIR/session.json"
     echo -e "${green}Telegram login successful, session saved.${plain}"
 }
 
@@ -220,7 +218,7 @@ install_service() {
     echo -e "${green}Installing systemd service...${plain}"
 
     set -a
-    source "$CONFIG_DIR/thefeed.env"
+    source "$DATA_DIR/thefeed.env"
     set +a
 
     cat > "$SERVICE_FILE" <<SVCEOF
@@ -231,15 +229,15 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-EnvironmentFile=${CONFIG_DIR}/thefeed.env
+WorkingDirectory=${INSTALL_DIR}
+EnvironmentFile=${DATA_DIR}/thefeed.env
 ExecStart=${INSTALL_DIR}/thefeed-server \\
+    --data-dir ${DATA_DIR} \\
     --domain \${THEFEED_DOMAIN} \\
     --key \${THEFEED_KEY} \\
     --api-id \${TELEGRAM_API_ID} \\
     --api-hash \${TELEGRAM_API_HASH} \\
     --phone \${TELEGRAM_PHONE} \\
-    --channels ${CONFIG_DIR}/channels.txt \\
-    --session ${SESSION_DIR}/session.json \\
     --listen \${THEFEED_LISTEN:-0.0.0.0:53}
 
 Restart=on-failure
@@ -278,9 +276,10 @@ show_usage() {
     echo -e "│  ${blue}systemctl stop thefeed-server${plain}     - Stop            │"
     echo -e "│  ${blue}journalctl -u thefeed-server -f${plain}  - Live logs       │"
     echo -e "│                                                     │"
-    echo -e "│  ${blue}Config:${plain}   ${CONFIG_DIR}/thefeed.env               │"
-    echo -e "│  ${blue}Channels:${plain} ${CONFIG_DIR}/channels.txt             │"
-    echo -e "│  ${blue}Session:${plain}  ${SESSION_DIR}/session.json           │"
+    echo -e "│  All data in: ${blue}${INSTALL_DIR}/${plain}                        │"
+    echo -e "│  ${blue}Config:${plain}   ${DATA_DIR}/thefeed.env                   │"
+    echo -e "│  ${blue}Channels:${plain} ${DATA_DIR}/channels.txt                 │"
+    echo -e "│  ${blue}Session:${plain}  ${DATA_DIR}/session.json               │"
     echo -e "│  ${blue}Binary:${plain}   ${INSTALL_DIR}/thefeed-server         │"
     echo -e "│                                                     │"
     echo -e "│  ${yellow}Update:${plain} sudo bash install.sh                      │"
@@ -323,7 +322,7 @@ install_thefeed() {
     download_binary "$version"
 
     # First install: full setup
-    if [[ ! -f "$CONFIG_DIR/thefeed.env" ]]; then
+    if [[ ! -f "$DATA_DIR/thefeed.env" ]]; then
         setup_config
         telegram_login
         install_service
@@ -343,7 +342,7 @@ install_thefeed() {
 }
 
 login_only() {
-    if [[ ! -f "$CONFIG_DIR/thefeed.env" ]]; then
+    if [[ ! -f "$DATA_DIR/thefeed.env" ]]; then
         echo -e "${red}Config not found. Run install first: bash install.sh${plain}"
         exit 1
     fi
@@ -364,12 +363,13 @@ uninstall_thefeed() {
     rm -f "$SERVICE_FILE"
     systemctl daemon-reload
 
-    rm -rf "$INSTALL_DIR"
-
-    read -rp "Remove config and session data? [y/N]: " remove_data
+    read -rp "Remove all data (config, session, binary)? [y/N]: " remove_data
     if [[ "$remove_data" == "y" || "$remove_data" == "Y" ]]; then
-        rm -rf "$CONFIG_DIR" "$SESSION_DIR"
-        echo -e "${green}Config and session data removed${plain}"
+        rm -rf "$INSTALL_DIR"
+        echo -e "${green}All data removed${plain}"
+    else
+        rm -f "${INSTALL_DIR}/thefeed-server"
+        echo -e "${green}Binary removed (data preserved in ${DATA_DIR})${plain}"
     fi
 
     echo -e "${green}thefeed uninstalled successfully${plain}"

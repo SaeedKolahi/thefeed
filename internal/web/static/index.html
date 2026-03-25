@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>thefeed</title>
+    <style>
+        @font-face {
+            font-family: 'Vazirmatn';
+            src: url('/static/Vazirmatn-Regular.woff2') format('woff2');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        :root {
+            --bg: #0f0f1a;
+            --surface: #1a1a2e;
+            --surface2: #232340;
+            --border: #2d2d50;
+            --accent: #7c3aed;
+            --accent-dim: #5b21b6;
+            --text: #e4e4e7;
+            --text-dim: #71717a;
+            --success: #22c55e;
+            --error: #ef4444;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 16px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            height: 48px;
+        }
+        .header-left { display: flex; align-items: center; gap: 10px; }
+        .header h1 { font-size: 16px; font-weight: 600; }
+        .header-actions { display: flex; gap: 8px; }
+
+        .status-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-dot.connected { background: var(--success); }
+        .status-dot.disconnected { background: var(--error); }
+
+        .btn {
+            padding: 6px 14px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--surface2);
+            color: var(--text);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 13px;
+            transition: background 0.15s;
+        }
+        .btn:hover { background: var(--border); }
+        .btn-primary { background: var(--accent); border-color: var(--accent); }
+        .btn-primary:hover { background: var(--accent-dim); }
+
+        .main {
+            display: flex;
+            height: calc(100vh - 48px);
+        }
+
+        .sidebar {
+            width: 220px;
+            min-width: 220px;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        .sidebar-title {
+            padding: 12px 16px 8px;
+            font-size: 12px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            letter-spacing: 1px;
+        }
+        .channel-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            border-left: 3px solid transparent;
+            transition: all 0.15s;
+            font-size: 14px;
+        }
+        .channel-item:hover { background: var(--surface2); }
+        .channel-item.active {
+            background: var(--surface2);
+            border-left-color: var(--accent);
+            color: white;
+        }
+
+        .content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            direction: rtl;
+            text-align: right;
+        }
+        .message {
+            margin-bottom: 16px;
+            padding: 12px 16px;
+            background: var(--surface);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: var(--text-dim);
+            direction: ltr;
+        }
+        .message-text {
+            line-height: 1.8;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .log-panel {
+            height: 150px;
+            min-height: 100px;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            overflow-y: auto;
+            font-size: 12px;
+            font-family: 'Vazirmatn', monospace;
+            padding: 8px 12px;
+            direction: ltr;
+            text-align: left;
+            color: var(--text-dim);
+        }
+        .log-line { padding: 2px 0; }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            width: 440px;
+            max-width: 95vw;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal h2 { margin-bottom: 20px; font-size: 18px; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 13px;
+            color: var(--text-dim);
+        }
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 14px;
+            direction: ltr;
+            text-align: left;
+        }
+        .form-group textarea { min-height: 80px; resize: vertical; }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-dim);
+            gap: 16px;
+        }
+        .empty-state p { font-size: 14px; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <h1>thefeed</h1>
+            <span class="status-dot disconnected" id="statusDot"></span>
+        </div>
+        <div class="header-actions">
+            <button class="btn" onclick="doRefresh()">Refresh</button>
+            <button class="btn" onclick="openSettings()">Settings</button>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="sidebar">
+            <div class="sidebar-title">Channels</div>
+            <div id="channelList">
+                <div style="padding:16px;color:var(--text-dim);font-size:13px;">No channels</div>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="messages" id="messages">
+                <div class="empty-state" id="emptyState">
+                    <p>No messages yet</p>
+                    <button class="btn btn-primary" onclick="openSettings()">Configure</button>
+                </div>
+            </div>
+            <div class="log-panel" id="logPanel"></div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal">
+            <h2>Settings</h2>
+            <div class="form-group">
+                <label>Domain</label>
+                <input type="text" id="cfgDomain" placeholder="t.example.com">
+            </div>
+            <div class="form-group">
+                <label>Passphrase</label>
+                <input type="password" id="cfgKey" placeholder="Encryption passphrase">
+            </div>
+            <div class="form-group">
+                <label>Resolvers (one per line)</label>
+                <textarea id="cfgResolvers" placeholder="8.8.8.8&#10;1.1.1.1"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Query Mode</label>
+                <select id="cfgQueryMode">
+                    <option value="single">Single label (base32, stealthier)</option>
+                    <option value="double">Double label (hex)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Rate Limit (queries/sec, 0 = unlimited)</label>
+                <input type="number" id="cfgRateLimit" value="0" min="0" step="0.1">
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">
+                <button class="btn" onclick="closeSettings()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveConfig()">Save & Connect</button>
+            </div>
+            <div id="settingsError" style="color:var(--error);margin-top:12px;font-size:13px;display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        let selectedChannel = 0;
+        let channels = [];
+        let eventSource = null;
+
+        async function init() {
+            try {
+                const resp = await fetch('/api/status');
+                const status = await resp.json();
+                if (!status.configured) {
+                    openSettings();
+                } else {
+                    document.getElementById('statusDot').className = 'status-dot connected';
+                    if (status.channels && status.channels.length > 0) {
+                        channels = status.channels;
+                        renderChannels();
+                        selectChannel(1);
+                    }
+                }
+            } catch (e) {}
+            connectSSE();
+        }
+
+        function connectSSE() {
+            if (eventSource) eventSource.close();
+            eventSource = new EventSource('/api/events');
+            eventSource.addEventListener('log', function(e) {
+                addLogLine(JSON.parse(e.data));
+            });
+            eventSource.addEventListener('update', function(e) {
+                loadChannels();
+                if (selectedChannel > 0) loadMessages(selectedChannel);
+            });
+            eventSource.onerror = function() {
+                document.getElementById('statusDot').className = 'status-dot disconnected';
+            };
+            eventSource.onopen = function() {
+                document.getElementById('statusDot').className = 'status-dot connected';
+            };
+        }
+
+        function renderChannels() {
+            var el = document.getElementById('channelList');
+            if (!channels || channels.length === 0) {
+                el.innerHTML = '<div style="padding:16px;color:var(--text-dim);font-size:13px;">No channels</div>';
+                return;
+            }
+            var html = '';
+            for (var i = 0; i < channels.length; i++) {
+                var num = i + 1;
+                var active = num === selectedChannel ? ' active' : '';
+                var name = channels[i].Name || channels[i].name || 'Channel ' + num;
+                html += '<div class="channel-item' + active + '" onclick="selectChannel(' + num + ')">' + escapeHtml(name) + '</div>';
+            }
+            el.innerHTML = html;
+        }
+
+        async function selectChannel(num) {
+            selectedChannel = num;
+            renderChannels();
+            await loadMessages(num);
+        }
+
+        async function loadChannels() {
+            try {
+                var resp = await fetch('/api/channels');
+                channels = await resp.json();
+                if (!channels) channels = [];
+                renderChannels();
+            } catch (e) {}
+        }
+
+        async function loadMessages(chNum) {
+            try {
+                var resp = await fetch('/api/messages/' + chNum);
+                var msgs = await resp.json();
+                renderMessages(msgs);
+            } catch (e) {}
+        }
+
+        function renderMessages(msgs) {
+            var el = document.getElementById('messages');
+            if (!msgs || msgs.length === 0) {
+                el.innerHTML = '<div class="empty-state"><p>No messages in this channel</p></div>';
+                return;
+            }
+            var html = '';
+            for (var i = 0; i < msgs.length; i++) {
+                var msg = msgs[i];
+                var ts = new Date((msg.Timestamp || msg.timestamp) * 1000);
+                var timeStr = ts.toLocaleTimeString('fa-IR', {hour: '2-digit', minute: '2-digit'});
+                var dateStr = ts.toLocaleDateString('fa-IR', {month: 'short', day: 'numeric'});
+                var id = msg.ID || msg.id;
+                var text = escapeHtml(msg.Text || msg.text || '');
+                html += '<div class="message">' +
+                    '<div class="message-header">' +
+                    '<span>#' + id + '</span>' +
+                    '<span>' + timeStr + ' ' + dateStr + '</span>' +
+                    '</div>' +
+                    '<div class="message-text">' + text + '</div>' +
+                    '</div>';
+            }
+            el.innerHTML = html;
+        }
+
+        function addLogLine(line) {
+            var el = document.getElementById('logPanel');
+            var div = document.createElement('div');
+            div.className = 'log-line';
+            div.textContent = line;
+            el.appendChild(div);
+            el.scrollTop = el.scrollHeight;
+            while (el.children.length > 200) {
+                el.removeChild(el.firstChild);
+            }
+        }
+
+        async function doRefresh() {
+            try { await fetch('/api/refresh', {method: 'POST'}); } catch (e) {}
+        }
+
+        function openSettings() {
+            document.getElementById('settingsModal').classList.add('active');
+            fetch('/api/config').then(function(r) { return r.json(); }).then(function(cfg) {
+                if (cfg.domain) document.getElementById('cfgDomain').value = cfg.domain;
+                if (cfg.key) document.getElementById('cfgKey').value = cfg.key;
+                if (cfg.resolvers) document.getElementById('cfgResolvers').value = cfg.resolvers.join('\n');
+                if (cfg.queryMode) document.getElementById('cfgQueryMode').value = cfg.queryMode;
+                if (cfg.rateLimit) document.getElementById('cfgRateLimit').value = cfg.rateLimit;
+            }).catch(function() {});
+        }
+
+        function closeSettings() {
+            document.getElementById('settingsModal').classList.remove('active');
+            document.getElementById('settingsError').style.display = 'none';
+        }
+
+        async function saveConfig() {
+            var errEl = document.getElementById('settingsError');
+            errEl.style.display = 'none';
+
+            var resolversText = document.getElementById('cfgResolvers').value.trim();
+            var resolvers = resolversText.split(/[\n,]+/).map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+
+            var cfg = {
+                domain: document.getElementById('cfgDomain').value.trim(),
+                key: document.getElementById('cfgKey').value,
+                resolvers: resolvers,
+                queryMode: document.getElementById('cfgQueryMode').value,
+                rateLimit: parseFloat(document.getElementById('cfgRateLimit').value) || 0
+            };
+
+            if (!cfg.domain || !cfg.key || resolvers.length === 0) {
+                errEl.textContent = 'Domain, passphrase, and at least one resolver are required.';
+                errEl.style.display = 'block';
+                return;
+            }
+
+            try {
+                var resp = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(cfg)
+                });
+                if (!resp.ok) {
+                    var text = await resp.text();
+                    throw new Error(text);
+                }
+                closeSettings();
+                document.getElementById('statusDot').className = 'status-dot connected';
+                setTimeout(function() {
+                    loadChannels();
+                }, 2000);
+            } catch (e) {
+                errEl.textContent = e.message;
+                errEl.style.display = 'block';
+            }
+        }
+
+        function escapeHtml(s) {
+            var div = document.createElement('div');
+            div.appendChild(document.createTextNode(s));
+            return div.innerHTML;
+        }
+
+        init();
+    </script>
+</body>
+</html>
