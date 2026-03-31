@@ -45,18 +45,6 @@ android {
         }
     }
 
-    // Produce per-ABI split APKs + one universal APK in a single Gradle run.
-    // The arm64-v8a split is the recommended download for modern phones.
-    // The universal APK covers armeabi-v7a (older 32-bit ARM) and x86_64 (emulators).
-    splits {
-        abi {
-            enable true
-            reset()
-            include "arm64-v8a", "armeabi-v7a"
-            universalApk true
-        }
-    }
-
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17

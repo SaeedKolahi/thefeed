@@ -38,9 +38,6 @@ jobs:
             goarch: amd64
           - goos: android
             goarch: arm64
-          - goos: android
-            goarch: arm
-            goarm: '7'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -70,7 +67,6 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          GOARM: ${{ matrix.goarm }}
           CGO_ENABLED: '0'
         run: |
           VERSION=${GITHUB_REF_NAME:-dev}
@@ -115,11 +111,8 @@ jobs:
           # location under Android's W^X policy). ABI splits in build.gradle ensure
           # the arm64 APK only contains arm64-v8a and universal contains all three.
           mkdir -p android/app/src/main/jniLibs/arm64-v8a
-          mkdir -p android/app/src/main/jniLibs/armeabi-v7a
           test -f artifacts/thefeed-client-android-arm64
           cp artifacts/thefeed-client-android-arm64 android/app/src/main/jniLibs/arm64-v8a/libthefeed.so
-          test -f artifacts/thefeed-client-android-arm
-          cp artifacts/thefeed-client-android-arm    android/app/src/main/jniLibs/armeabi-v7a/libthefeed.so
 
       - name: Decode signing keystore
         if: env.KEYSTORE_BASE64 != ''
@@ -151,21 +144,17 @@ jobs:
             ./gradlew --no-daemon assembleDebug
           fi
 
-      - name: Rename APKs
+      - name: Rename APK
         run: |
-          if [ -f android/app/keystore.jks ]; then BT=release; else BT=debug; fi
-          ARM64=$(find android/app/build/outputs/apk/$BT -name "*arm64*" | head -1)
-          UNIVERSAL=$(find android/app/build/outputs/apk/$BT -name "*universal*" | head -1)
-          [ -n "$ARM64" ]    && cp "$ARM64"    artifacts/thefeed-android-arm64.apk
-          [ -n "$UNIVERSAL" ] && cp "$UNIVERSAL" artifacts/thefeed-android-universal.apk
+          if [ -f android/app/keystore.jks ]; then BT=release; SUFFIX=release; else BT=debug; SUFFIX=debug; fi
+          APK=$(find android/app/build/outputs/apk/$BT -name "*.apk" | head -1)
+          cp "$APK" artifacts/thefeed-android-arm64.apk
 
       - name: Upload Android APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: thefeed-android-apk
-          path: |
-            artifacts/thefeed-android-arm64.apk
-            artifacts/thefeed-android-universal.apk
+          path: artifacts/thefeed-android-arm64.apk
 
   release:
     needs: [build, android-apk]
