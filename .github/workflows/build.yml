@@ -111,6 +111,13 @@ jobs:
           cp artifacts/thefeed-client-android-arm64 android/app/src/main/assets/thefeed-client
           chmod +x android/app/src/main/assets/thefeed-client
 
+      - name: Decode signing keystore
+        if: env.KEYSTORE_BASE64 != ''
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/keystore.jks
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -120,15 +127,27 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Generate wrapper and build debug APK
+      - name: Build APK
         working-directory: android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           gradle wrapper --gradle-version 8.10.2
-          ./gradlew --no-daemon assembleDebug
+          if [ -f app/keystore.jks ]; then
+            ./gradlew --no-daemon assembleRelease
+          else
+            ./gradlew --no-daemon assembleDebug
+          fi
 
       - name: Rename APK
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk artifacts/thefeed-android-arm64.apk
+          if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
+            cp android/app/build/outputs/apk/release/app-release.apk artifacts/thefeed-android-arm64.apk
+          else
+            cp android/app/build/outputs/apk/debug/app-debug.apk artifacts/thefeed-android-arm64.apk
+          fi
 
       - name: Upload Android APK artifact
         uses: actions/upload-artifact@v4
