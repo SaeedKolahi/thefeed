@@ -13,7 +13,6 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.Button
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,23 +34,6 @@ class MainActivity : ComponentActivity() {
 
         webView = findViewById(R.id.webView)
         txtStatus = findViewById(R.id.txtStatus)
-
-        findViewById<Button>(R.id.btnStart).setOnClickListener {
-            startThefeedService()
-            txtStatus.text = "Service started. Opening local UI..."
-            retryCount = 0
-            loadLocalWebWithRetry()
-        }
-
-        findViewById<Button>(R.id.btnStop).setOnClickListener {
-            stopService(Intent(this, ThefeedService::class.java))
-            txtStatus.text = "Service stopped"
-        }
-
-        findViewById<Button>(R.id.btnReload).setOnClickListener {
-            retryCount = 0
-            loadLocalWebWithRetry()
-        }
 
         requestNotificationPermission()
         configureWebView()

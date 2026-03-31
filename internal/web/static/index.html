@@ -50,8 +50,17 @@
             position: relative;
             z-index: 20;
         }
-        .header-left { display: flex; align-items: center; gap: 10px; }
+        .header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
         .header h1 { font-size: 17px; font-weight: 700; letter-spacing: 0.3px; }
+        .header-channel-name {
+            display: none;
+            font-size: 13px;
+            color: var(--text-dim);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 160px;
+        }
         .header-actions { display: flex; gap: 8px; align-items: center; }
         .next-fetch-timer { font-size: 11px; color: var(--text-dim); }
 
@@ -376,6 +385,12 @@
             .next-fetch-timer {
                 display: none;
             }
+            .header-channel-name {
+                display: block;
+            }
+            .header h1 {
+                flex-shrink: 0;
+            }
             .header-actions .btn {
                 padding: 6px 10px;
                 font-size: 12px;
@@ -466,6 +481,7 @@
         <div class="header-left">
             <button class="mobile-menu-btn" onclick="toggleSidebar()" aria-label="Open channels">☰</button>
             <h1>thefeed</h1>
+            <span class="header-channel-name" id="headerChannelName"></span>
             <span class="status-dot disconnected" id="statusDot"></span>
             <span class="next-fetch-timer" id="nextFetchTimer"></span>
         </div>
@@ -767,6 +783,9 @@
             newMsgCount = 0;
             document.title = originalTitle;
             toggleSidebar(true);
+            var chName = (channels[num - 1] && (channels[num - 1].Name || channels[num - 1].name)) || '';
+            var nameEl = document.getElementById('headerChannelName');
+            if (nameEl) nameEl.textContent = chName ? ('· ' + chName) : '';
             renderChannels();
             updateSendPanel();
             document.getElementById('messages').innerHTML = '<div class="empty-state"><p>Loading...</p></div>';
@@ -994,6 +1013,9 @@
         async function saveConfig() {
             var errEl = document.getElementById('settingsError');
             errEl.style.display = 'none';
+            var saveBtn = document.querySelector('#settingsModal .btn-primary');
+            if (saveBtn && saveBtn.disabled) return;
+            if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Connecting...'; }
             var resolversText = document.getElementById('cfgResolvers').value.trim();
             var resolvers = resolversText.split(/[\n,]+/).map(function(s) { return s.trim(); }).filter(function(s) { return s; });
             var cfg = {
@@ -1034,6 +1056,8 @@
             } catch (e) {
                 errEl.textContent = e.message;
                 errEl.style.display = 'block';
+            } finally {
+                if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save \u0026 Connect'; }
             }
         }
 
