@@ -37,8 +37,10 @@ android {
         // If neither is set, falls back to the Android debug key so every build has a consistent signature.
         release {
             def ksFile = file("keystore.jks")
-            if (System.getenv("KEYSTORE_BASE64")) {
-                // CI decodes keystore from secret
+            def ksBase64 = System.getenv("KEYSTORE_BASE64")
+            if (ksBase64) {
+                // Decode base64 keystore from env var and write it to disk for Gradle to use
+                ksFile.bytes = Base64.decoder.decode(ksBase64)
                 storeFile ksFile
                 storePassword System.getenv("KEYSTORE_PASSWORD") ?: ""
                 keyAlias System.getenv("KEY_ALIAS") ?: "thefeed"
