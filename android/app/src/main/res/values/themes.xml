@@ -4,5 +4,7 @@
         <item name="colorPrimaryVariant">@color/bgPanel</item>
         <item name="colorOnPrimary">@color/text</item>
         <item name="android:statusBarColor" tools:targetApi="l">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
     </style>
 </resources>

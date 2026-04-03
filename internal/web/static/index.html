@@ -356,6 +356,8 @@ var I18N = {
   fa: {
     search:'جستجو...',settings:'تنظیمات',profiles:'پروفایل‌ها',
     no_channels:'کانالی وجود ندارد',loading:'در حال بارگذاری...',no_messages:'هنوز پیامی در این کانال وجود ندارد',
+    no_channels_hint:'برنامه در حال دریافت اطلاعات از سرور است...',
+    no_messages_hint:'برنامه در حال دریافت پیام‌ها است. لطفاً چند لحظه صبر کنید...',
     write_message:'پیام بنویسید...',configure_server:'برای شروع یک سرور راه‌اندازی کنید',
     set_up:'راه‌اندازی',switching:'در حال تغییر پروفایل...',
     font_size:'اندازه قلم',debug_mode:'حالت دیباگ',language:'زبان',
@@ -378,6 +380,8 @@ var I18N = {
   en: {
     search:'Search...',settings:'Settings',profiles:'Profiles',
     no_channels:'No channels',loading:'Loading...',no_messages:'No messages in this channel',
+    no_channels_hint:'The app is fetching channel list from the server...',
+    no_messages_hint:'The app is trying to fetch messages. Please wait a moment...',
     write_message:'Write a message...',configure_server:'Configure a server to start reading',
     set_up:'Set Up',switching:'Switching profile...',
     font_size:'Font Size',debug_mode:'Debug mode',language:'Language',
@@ -756,7 +760,7 @@ async function loadChannels(){
 
 function renderChannels(){
   var el=document.getElementById('channelList');
-  if(!channels||!channels.length){el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text-dim);font-size:13px">'+t('no_channels')+'</div>';return}
+  if(!channels||!channels.length){el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text-dim);font-size:13px">'+t('no_channels')+'<br><span style="font-size:11px;opacity:.7">'+t('no_channels_hint')+'</span></div>';return}
   var pubs=[],privs=[];
   for(var i=0;i<channels.length;i++){var c=channels[i];(c.ChatType===1||c.chatType===1?privs:pubs).push({ch:c,idx:i})}
   function section(title,items){
@@ -810,7 +814,7 @@ async function loadMessages(chNum){
 
 function renderMessages(msgs){
   var el=document.getElementById('messages');
-  if(!msgs||!msgs.length){el.innerHTML='<div class="empty-state"><p>'+t('no_messages')+'</p></div>';return}
+  if(!msgs||!msgs.length){el.innerHTML='<div class="empty-state"><p>'+t('no_messages')+'</p><p style="font-size:12px;opacity:.6;margin-top:6px">'+t('no_messages_hint')+'</p></div>';return}
   msgs.sort(function(a,b){return(a.Timestamp||a.timestamp||0)-(b.Timestamp||b.timestamp||0)});
   var html='',lastDate='';
   var dateLocale=lang==='fa'?'fa-IR':'en-US';

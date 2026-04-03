@@ -15,9 +15,15 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.view.View
 import android.widget.TextView
+import android.webkit.JsResult
+import android.webkit.WebChromeClient
+import android.app.AlertDialog
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -32,7 +38,19 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Let the app draw behind the system status bar
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_main)
+
+        // Apply top inset as padding so content isn't hidden behind the status bar
+        val rootView = findViewById<View>(android.R.id.content)
+        ViewCompat.setOnApplyWindowInsetsListener(rootView) { v, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(0, systemBars.top, 0, systemBars.bottom)
+            insets
+        }
+        // Trigger inset dispatch explicitly — required on some older Android versions
+        ViewCompat.requestApplyInsets(rootView)
 
         webView = findViewById(R.id.webView)
         txtStatus = findViewById(R.id.txtStatus)
@@ -85,6 +103,21 @@ class MainActivity : ComponentActivity() {
                     setStatus("Reconnecting...")
                     handler.postDelayed({ waitForServerThenLoad() }, RETRY_DELAY_MS)
                 }
+            }
+        }
+
+        // Required for confirm() / alert() / prompt() to work in WebView
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onJsConfirm(
+                view: WebView?, url: String?, message: String?, result: JsResult?
+            ): Boolean {
+                AlertDialog.Builder(this@MainActivity)
+                    .setMessage(message)
+                    .setPositiveButton(android.R.string.ok) { _, _ -> result?.confirm() }
+                    .setNegativeButton(android.R.string.cancel) { _, _ -> result?.cancel() }
+                    .setOnCancelListener { result?.cancel() }
+                    .show()
+                return true
             }
         }
 
