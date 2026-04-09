@@ -21,6 +21,7 @@ type Config struct {
 	MsgLimit     int  // max messages per channel (0 = default 15)
 	NoTelegram   bool // if true, fetch public channels without Telegram login
 	AllowManage  bool // if true, remote channel management and sending via DNS is allowed
+	EnableMedia  bool // if true, media tokens/download/preview are enabled
 	Telegram     TelegramConfig
 }
 
@@ -56,7 +57,7 @@ func (s *Server) Run(ctx context.Context) error {
 
 	// Handle login-only mode
 	if s.cfg.Telegram.LoginOnly {
-		reader := NewTelegramReader(s.cfg.Telegram, s.feed.ChannelNames(), s.feed, 15)
+		reader := NewTelegramReader(s.cfg.Telegram, s.feed.ChannelNames(), s.feed, 15, s.cfg.EnableMedia)
 		return reader.Run(ctx)
 	}
 
@@ -66,7 +67,7 @@ func (s *Server) Run(ctx context.Context) error {
 		if msgLimit <= 0 {
 			msgLimit = 15
 		}
-		reader := NewTelegramReader(s.cfg.Telegram, s.feed.ChannelNames(), s.feed, msgLimit)
+		reader := NewTelegramReader(s.cfg.Telegram, s.feed.ChannelNames(), s.feed, msgLimit, s.cfg.EnableMedia)
 		s.reader = reader
 		go func() {
 			if err := reader.Run(ctx); err != nil {
@@ -92,7 +93,7 @@ func (s *Server) Run(ctx context.Context) error {
 	if maxPad == 0 {
 		maxPad = protocol.DefaultMaxPadding
 	}
-	dnsServer := NewDNSServer(s.cfg.ListenAddr, s.cfg.Domain, s.feed, queryKey, responseKey, maxPad, s.reader, s.cfg.AllowManage, s.cfg.ChannelsFile)
+	dnsServer := NewDNSServer(s.cfg.ListenAddr, s.cfg.Domain, s.feed, queryKey, responseKey, maxPad, s.reader, s.cfg.AllowManage, s.cfg.ChannelsFile, s.cfg.EnableMedia)
 	return dnsServer.ListenAndServe(ctx)
 }
 

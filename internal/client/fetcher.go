@@ -829,30 +829,39 @@ type mediaInitResponse struct {
 	Blocks int    `json:"blocks"`
 }
 
-// FetchMedia downloads media bytes identified by token over DNS.
-func (f *Fetcher) FetchMedia(ctx context.Context, token string) ([]byte, string, string, error) {
-	f.log("MEDIA_FETCH start token=%s", token)
+// FetchMediaMeta fetches media metadata without downloading data blocks.
+func (f *Fetcher) FetchMediaMeta(ctx context.Context, token string) (name, mime string, size, blocks int, err error) {
 	initQname, err := protocol.EncodeMediaInitQuery(f.queryKey, token, f.domain, f.queryMode)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("encode media init: %w", err)
+		return "", "", 0, 0, fmt.Errorf("encode media init: %w", err)
 	}
 
 	initRaw, err := f.queryUpload(ctx, initQname)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("media init query: %w", err)
+		return "", "", 0, 0, fmt.Errorf("media init query: %w", err)
 	}
 
 	var initResp mediaInitResponse
 	if err := json.Unmarshal(initRaw, &initResp); err != nil {
-		return nil, "", "", fmt.Errorf("parse media init: %w", err)
+		return "", "", 0, 0, fmt.Errorf("parse media init: %w", err)
 	}
 	if initResp.Blocks <= 0 {
-		return nil, "", "", fmt.Errorf("invalid media block count: %d", initResp.Blocks)
+		return "", "", 0, 0, fmt.Errorf("invalid media block count: %d", initResp.Blocks)
 	}
-	f.log("MEDIA_FETCH init token=%s blocks=%d size=%d", token, initResp.Blocks, initResp.Size)
+	return initResp.Name, initResp.Mime, initResp.Size, initResp.Blocks, nil
+}
+
+// FetchMedia downloads media bytes identified by token over DNS.
+func (f *Fetcher) FetchMedia(ctx context.Context, token string) ([]byte, string, string, error) {
+	f.log("MEDIA_FETCH start token=%s", token)
+	name, mime, size, blocks, err := f.FetchMediaMeta(ctx, token)
+	if err != nil {
+		return nil, "", "", err
+	}
+	f.log("MEDIA_FETCH init token=%s blocks=%d size=%d", token, blocks, size)
 
 	var data []byte
-	for i := 0; i < initResp.Blocks; i++ {
+	for i := 0; i < blocks; i++ {
 		qname, err := protocol.EncodeMediaBlockQuery(f.queryKey, token, uint16(i), f.domain, f.queryMode)
 		if err != nil {
 			return nil, "", "", fmt.Errorf("encode media block %d: %w", i, err)
@@ -862,13 +871,13 @@ func (f *Fetcher) FetchMedia(ctx context.Context, token string) ([]byte, string,
 			return nil, "", "", fmt.Errorf("fetch media block %d: %w", i, err)
 		}
 		data = append(data, block...)
-		pct := int(float64(i+1) * 100.0 / float64(initResp.Blocks))
-		f.log("MEDIA_FETCH progress token=%s %d/%d %d%%", token, i+1, initResp.Blocks, pct)
+		pct := int(float64(i+1) * 100.0 / float64(blocks))
+		f.log("MEDIA_FETCH progress token=%s %d/%d %d%%", token, i+1, blocks, pct)
 	}
 
-	if initResp.Size >= 0 && len(data) > initResp.Size {
-		data = data[:initResp.Size]
+	if size >= 0 && len(data) > size {
+		data = data[:size]
 	}
 	f.log("MEDIA_FETCH done token=%s bytes=%d", token, len(data))
-	return data, initResp.Name, initResp.Mime, nil
+	return data, name, mime, nil
 }

@@ -7,6 +7,9 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"log"
 	"os"
 	"path/filepath"
@@ -19,6 +22,9 @@ import (
 	"github.com/gotd/td/telegram/downloader"
 	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/tg"
+
+	_ "image/gif"
+	_ "image/png"
 
 	"github.com/sartoopjj/thefeed/internal/protocol"
 )
@@ -77,12 +83,14 @@ type TelegramReader struct {
 
 	mediaMu    sync.RWMutex
 	mediaIndex map[string]*mediaDescriptor
+	enableMedia bool
 }
 
 type mediaDescriptor struct {
 	location tg.InputFileLocationClass
 	fileName string
 	mimeType string
+	preview  bool
 }
 
 // resolvedPeer holds the resolved Telegram peer along with its chat type.
@@ -98,7 +106,7 @@ type cachedMessages struct {
 }
 
 // NewTelegramReader creates a reader for the given channel usernames.
-func NewTelegramReader(cfg TelegramConfig, channelUsernames []string, feed *Feed, msgLimit int) *TelegramReader {
+func NewTelegramReader(cfg TelegramConfig, channelUsernames []string, feed *Feed, msgLimit int, enableMedia bool) *TelegramReader {
 	cleaned := make([]string, len(channelUsernames))
 	for i, u := range channelUsernames {
 		cleaned[i] = strings.TrimPrefix(strings.TrimSpace(u), "@")
@@ -115,6 +123,7 @@ func NewTelegramReader(cfg TelegramConfig, channelUsernames []string, feed *Feed
 		cacheTTL:  10 * time.Minute,
 		refreshCh: make(chan struct{}, 1),
 		mediaIndex: make(map[string]*mediaDescriptor),
+		enableMedia: enableMedia,
 	}
 }
 
@@ -429,11 +438,14 @@ func (tr *TelegramReader) extractText(msg *tg.Message) string {
 	}
 
 	if mediaPrefix != "" {
-		if token := tr.registerMedia(msg); token != "" {
+		if mediaToken, previewToken := tr.registerMedia(msg); mediaToken != "" {
 			if text != "" {
 				text += "\n"
 			}
-			text += "[MEDIA_TOKEN:" + token + "]"
+			text += "[MEDIA_TOKEN:" + mediaToken + "]"
+			if previewToken != "" {
+				text += "\n[MEDIA_PREVIEW_TOKEN:" + previewToken + "]"
+			}
 		}
 		if text != "" {
 			return mediaPrefix + "\n" + text
@@ -444,71 +456,114 @@ func (tr *TelegramReader) extractText(msg *tg.Message) string {
 	return text
 }
 
-func (tr *TelegramReader) registerMedia(msg *tg.Message) string {
+func (tr *TelegramReader) registerMedia(msg *tg.Message) (string, string) {
+	if !tr.enableMedia {
+		return "", ""
+	}
 	if msg.Media == nil {
-		return ""
+		return "", ""
 	}
 
 	tokenBase := fmt.Sprintf("%d:%d", msg.PeerID.TypeID(), msg.ID)
 	sum := sha1.Sum([]byte(tokenBase))
-	token := hex.EncodeToString(sum[:8])
+	mediaToken := hex.EncodeToString(sum[:8])
+	previewSum := sha1.Sum([]byte(tokenBase + ":preview"))
+	previewToken := hex.EncodeToString(previewSum[:8])
 
-	var desc *mediaDescriptor
+	var mainDesc *mediaDescriptor
+	var previewDesc *mediaDescriptor
 	switch media := msg.Media.(type) {
 	case *tg.MessageMediaPhoto:
 		photo, ok := media.Photo.(*tg.Photo)
 		if !ok {
-			return ""
+			return "", ""
 		}
-		loc := &tg.InputPhotoFileLocation{
+		mainLoc := &tg.InputPhotoFileLocation{
 			ID:            photo.ID,
 			AccessHash:    photo.AccessHash,
 			FileReference: photo.FileReference,
-			ThumbSize:     bestPhotoSizeType(photo.Sizes),
+			ThumbSize:     bestPhotoSizeType(photo.Sizes, false),
 		}
-		desc = &mediaDescriptor{
-			location: loc,
+		mainDesc = &mediaDescriptor{
+			location: mainLoc,
 			fileName: fmt.Sprintf("photo_%d.jpg", photo.ID),
 			mimeType: "image/jpeg",
+		}
+		previewType := bestPhotoSizeType(photo.Sizes, true)
+		if previewType != "" {
+			previewLoc := &tg.InputPhotoFileLocation{
+				ID:            photo.ID,
+				AccessHash:    photo.AccessHash,
+				FileReference: photo.FileReference,
+				ThumbSize:     previewType,
+			}
+			previewDesc = &mediaDescriptor{
+				location: previewLoc,
+				fileName: fmt.Sprintf("photo_%d_preview.jpg", photo.ID),
+				mimeType: "image/jpeg",
+				preview:  true,
+			}
 		}
 	case *tg.MessageMediaDocument:
 		doc, ok := media.Document.(*tg.Document)
 		if !ok {
-			return ""
+			return "", ""
 		}
-		desc = &mediaDescriptor{
+		mainDesc = &mediaDescriptor{
 			location: doc.AsInputDocumentFileLocation(),
 			fileName: documentFileName(doc),
 			mimeType: doc.MimeType,
 		}
+		if thumbType := bestPhotoSizeType(doc.Thumbs, true); thumbType != "" {
+			previewLoc := doc.AsInputDocumentFileLocation()
+			previewLoc.ThumbSize = thumbType
+			previewDesc = &mediaDescriptor{
+				location: previewLoc,
+				fileName: "preview_" + documentFileName(doc) + ".jpg",
+				mimeType: "image/jpeg",
+				preview:  true,
+			}
+		}
 	default:
-		return ""
+		return "", ""
 	}
 
 	tr.mediaMu.Lock()
-	tr.mediaIndex[token] = desc
+	tr.mediaIndex[mediaToken] = mainDesc
+	if previewDesc != nil {
+		tr.mediaIndex[previewToken] = previewDesc
+	}
 	tr.mediaMu.Unlock()
-	return token
+	if previewDesc != nil {
+		return mediaToken, previewToken
+	}
+	return mediaToken, ""
 }
 
-func bestPhotoSizeType(sizes []tg.PhotoSizeClass) string {
+func bestPhotoSizeType(sizes []tg.PhotoSizeClass, small bool) string {
 	bestType := ""
 	bestArea := 0
+	if small {
+		bestArea = 1 << 30
+	}
 	for _, sz := range sizes {
 		switch s := sz.(type) {
 		case *tg.PhotoSize:
 			area := s.W * s.H
-			if area > bestArea {
+			if (!small && area > bestArea) || (small && area > 0 && area < bestArea) {
 				bestArea = area
 				bestType = s.Type
 			}
 		case *tg.PhotoSizeProgressive:
 			area := s.W * s.H
-			if area > bestArea {
+			if (!small && area > bestArea) || (small && area > 0 && area < bestArea) {
 				bestArea = area
 				bestType = s.Type
 			}
 		}
+	}
+	if small && bestArea == 1<<30 {
+		return ""
 	}
 	return bestType
 }
@@ -543,9 +598,82 @@ func (tr *TelegramReader) DownloadMedia(ctx context.Context, token string) ([]by
 	if _, err := dl.Download(api, desc.location).Stream(ctx, &out); err != nil {
 		return nil, "", "", fmt.Errorf("download media: %w", err)
 	}
+	data := out.Bytes()
+	if desc.preview {
+		data = shrinkPreview(data)
+	}
 
-	return out.Bytes(), desc.fileName, desc.mimeType, nil
+	return data, desc.fileName, desc.mimeType, nil
 }
+
+func shrinkPreview(data []byte) []byte {
+	const maxSide = 72
+	const jpegQuality = 30
+
+	img, format, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return data
+	}
+	_ = format // keep decode format for future tuning
+
+	b := img.Bounds()
+	w, h := b.Dx(), b.Dy()
+	if w <= 0 || h <= 0 {
+		return data
+	}
+
+	nw, nh := w, h
+	if w > maxSide || h > maxSide {
+		if w >= h {
+			nw = maxSide
+			nh = h * maxSide / w
+		} else {
+			nh = maxSide
+			nw = w * maxSide / h
+		}
+		if nw < 1 {
+			nw = 1
+		}
+		if nh < 1 {
+			nh = 1
+		}
+	}
+
+	dst := image.NewRGBA(image.Rect(0, 0, nw, nh))
+	scaleNearest(dst, img, b)
+
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, dst, &jpeg.Options{Quality: jpegQuality}); err != nil {
+		return data
+	}
+	if buf.Len() == 0 {
+		return data
+	}
+	// Keep original if re-encode unexpectedly gets bigger.
+	if buf.Len() >= len(data) {
+		return data
+	}
+	return buf.Bytes()
+}
+
+func scaleNearest(dst *image.RGBA, src image.Image, srcBounds image.Rectangle) {
+	dw := dst.Bounds().Dx()
+	dh := dst.Bounds().Dy()
+	sw := srcBounds.Dx()
+	sh := srcBounds.Dy()
+	if dw <= 0 || dh <= 0 || sw <= 0 || sh <= 0 {
+		return
+	}
+	for y := 0; y < dh; y++ {
+		sy := srcBounds.Min.Y + (y*sh)/dh
+		for x := 0; x < dw; x++ {
+			sx := srcBounds.Min.X + (x*sw)/dw
+			c := color.RGBAModel.Convert(src.At(sx, sy)).(color.RGBA)
+			dst.SetRGBA(x, y, c)
+		}
+	}
+}
+
 
 func (tr *TelegramReader) classifyDocument(media *tg.MessageMediaDocument) string {
 	doc, ok := media.Document.(*tg.Document)

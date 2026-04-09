@@ -118,7 +118,7 @@ make build-server
 
 All data files (session, channels) are stored in the `--data-dir` directory (default: `./data`).
 
-Environment variables: `THEFEED_DOMAIN`, `THEFEED_KEY`, `THEFEED_MSG_LIMIT`, `THEFEED_ALLOW_MANAGE` (set to `0` to force-disable even if the flag is baked into the service), `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_PHONE`, `TELEGRAM_PASSWORD`
+Environment variables: `THEFEED_DOMAIN`, `THEFEED_KEY`, `THEFEED_MSG_LIMIT`, `THEFEED_ALLOW_MANAGE` (set to `0` to force-disable even if the flag is baked into the service), `THEFEED_ENABLE_MEDIA` (`1`/`0`), `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_PHONE`, `TELEGRAM_PASSWORD`
 
 #### Server Flags
 
@@ -138,6 +138,7 @@ Environment variables: `THEFEED_DOMAIN`, `THEFEED_KEY`, `THEFEED_MSG_LIMIT`, `TH
 | `--padding` | `32` | Max random padding bytes (0=disabled) |
 | `--msg-limit` | `15` | Maximum messages to fetch per Telegram channel |
 | `--allow-manage` | `false` | Allow remote send/channel management (default: disabled) |
+| `--enable-media` | `false` | Enable media preview/download support over DNS |
 | `--version` | | Show version and exit |
 
 ### Client

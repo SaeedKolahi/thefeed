@@ -171,6 +171,7 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/api/channels", s.handleChannels)
 	mux.HandleFunc("/api/messages/", s.handleMessages)
 	mux.HandleFunc("/api/media", s.handleMedia)
+	mux.HandleFunc("/api/media/meta", s.handleMediaMeta)
 	mux.HandleFunc("/api/refresh", s.handleRefresh)
 	mux.HandleFunc("/api/rescan", s.handleRescan)
 	mux.HandleFunc("/api/send", s.handleSend)
@@ -385,6 +386,7 @@ func (s *Server) handleMedia(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "token is required", 400)
 		return
 	}
+	inline := r.URL.Query().Get("inline") == "1"
 	s.addLog(fmt.Sprintf("Media download requested (token=%s)", token))
 
 	s.mu.RLock()
@@ -420,10 +422,55 @@ func (s *Server) handleMedia(w http.ResponseWriter, r *http.Request) {
 		name = "media.bin"
 	}
 	w.Header().Set("Content-Type", mimeType)
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", name))
+	if !inline {
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", name))
+	}
 	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 	s.addLog(fmt.Sprintf("Media ready: %s (%d bytes)", name, len(data)))
 	w.Write(data)
+}
+
+func (s *Server) handleMediaMeta(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", 405)
+		return
+	}
+	token := strings.TrimSpace(r.URL.Query().Get("token"))
+	if token == "" {
+		http.Error(w, "token is required", 400)
+		return
+	}
+
+	s.mu.RLock()
+	fetcher := s.fetcher
+	basectx := s.fetcherCtx
+	s.mu.RUnlock()
+	if fetcher == nil || basectx == nil {
+		http.Error(w, "not configured", 400)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+	defer cancel()
+	go func() {
+		select {
+		case <-basectx.Done():
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
+	name, mimeType, size, blocks, err := fetcher.FetchMediaMeta(ctx, token)
+	if err != nil {
+		http.Error(w, "failed to fetch media metadata", 500)
+		return
+	}
+	writeJSON(w, map[string]any{
+		"name":   name,
+		"mime":   mimeType,
+		"size":   size,
+		"blocks": blocks,
+	})
 }
 
 func (s *Server) handleRescan(w http.ResponseWriter, r *http.Request) {

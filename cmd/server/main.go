@@ -34,6 +34,7 @@ func main() {
 	maxPadding := flag.Int("padding", 32, "Max random padding bytes in DNS responses (anti-DPI, 0=disabled)")
 	msgLimit := flag.Int("msg-limit", 15, "Maximum messages to fetch per Telegram channel")
 	allowManage := flag.Bool("allow-manage", false, "Allow remote channel management and sending via DNS")
+	enableMedia := flag.Bool("enable-media", false, "Enable media file support (preview/download over DNS)")
 	showVersion := flag.Bool("version", false, "Show version and exit")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "thefeed-server %s\n\nServes Telegram channel content over encrypted DNS for censorship-resistant access.\n\nUsage:\n  thefeed-server [flags]\n\nFlags:\n", version.Version)
@@ -71,6 +72,14 @@ func main() {
 	// THEFEED_ALLOW_MANAGE=0 explicitly disables, even if flag was set
 	if os.Getenv("THEFEED_ALLOW_MANAGE") == "0" {
 		*allowManage = false
+	}
+	if v := os.Getenv("THEFEED_ENABLE_MEDIA"); v != "" {
+		if v == "0" || strings.EqualFold(v, "false") || strings.EqualFold(v, "off") {
+			*enableMedia = false
+		}
+		if v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "on") {
+			*enableMedia = true
+		}
 	}
 	if *msgLimit == 15 {
 		if v := os.Getenv("THEFEED_MSG_LIMIT"); v != "" {
@@ -140,6 +149,7 @@ func main() {
 		MsgLimit:     *msgLimit,
 		NoTelegram:   *noTelegram,
 		AllowManage:  *allowManage,
+		EnableMedia:  *enableMedia,
 		Telegram: server.TelegramConfig{
 			APIID:       id,
 			APIHash:     *apiHash,

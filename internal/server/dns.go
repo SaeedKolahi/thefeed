@@ -26,6 +26,7 @@ type DNSServer struct {
 	listenAddr   string
 	maxPadding   int
 	allowManage  bool   // if true, admin/send commands are accepted
+	enableMedia  bool   // if true, media init/data channels are accepted
 	channelsFile string // path to channels.txt for admin commands
 
 	sessionsMu sync.Mutex
@@ -53,7 +54,7 @@ type cachedMedia struct {
 }
 
 // NewDNSServer creates a DNS server for the given domain.
-func NewDNSServer(listenAddr, domain string, feed *Feed, queryKey, responseKey [protocol.KeySize]byte, maxPadding int, reader *TelegramReader, allowManage bool, channelsFile string) *DNSServer {
+func NewDNSServer(listenAddr, domain string, feed *Feed, queryKey, responseKey [protocol.KeySize]byte, maxPadding int, reader *TelegramReader, allowManage bool, channelsFile string, enableMedia bool) *DNSServer {
 	s := &DNSServer{
 		domain:       strings.TrimSuffix(domain, "."),
 		feed:         feed,
@@ -63,6 +64,7 @@ func NewDNSServer(listenAddr, domain string, feed *Feed, queryKey, responseKey [
 		listenAddr:   listenAddr,
 		maxPadding:   maxPadding,
 		allowManage:  allowManage,
+		enableMedia:  enableMedia,
 		channelsFile: channelsFile,
 		sessions:     make(map[uint16]*uploadSession),
 		mediaCache:   make(map[string]*cachedMedia),
@@ -225,6 +227,11 @@ func (s *DNSServer) cleanupExpiredMedia(now time.Time) {
 }
 
 func (s *DNSServer) handleMediaInitQuery(w dns.ResponseWriter, m *dns.Msg, q dns.Question) {
+	if !s.enableMedia {
+		m.Rcode = dns.RcodeRefused
+		w.WriteMsg(m)
+		return
+	}
 	if s.reader == nil {
 		m.Rcode = dns.RcodeRefused
 		w.WriteMsg(m)
@@ -278,6 +285,11 @@ func (s *DNSServer) handleMediaInitQuery(w dns.ResponseWriter, m *dns.Msg, q dns
 }
 
 func (s *DNSServer) handleMediaDataQuery(w dns.ResponseWriter, m *dns.Msg, q dns.Question) {
+	if !s.enableMedia {
+		m.Rcode = dns.RcodeRefused
+		w.WriteMsg(m)
+		return
+	}
 	tokenBlock, token, err := protocol.DecodeMediaBlockQuery(s.queryKey, q.Name, s.domain)
 	if err != nil {
 		log.Printf("[dns] decode media block: %v", err)
